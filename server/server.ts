@@ -3,8 +3,9 @@ import Fastify from 'fastify';
 import items from 'data/items.json' with { type: 'json' };
 import { Item } from 'src/types.ts';
 import { ItemsGetInQuerySchema, ItemUpdateInSchema } from 'src/validation.ts';
-import { treeifyError, ZodError } from 'zod';
+import { treeifyError, z, ZodError } from 'zod';
 import { doesItemNeedRevision } from './src/utils.ts';
+import { generateDescriptionSuggestion, generatePriceSuggestion } from './src/ai.ts';
 
 const ITEMS = items as Item[];
 
@@ -20,8 +21,17 @@ fastify.use((_, __, next) =>
 );
 
 // Настройка CORS
-fastify.use((_, reply, next) => {
+fastify.use((request, reply, next) => {
   reply.setHeader('Access-Control-Allow-Origin', '*');
+  reply.setHeader('Access-Control-Allow-Methods', 'GET,PUT,POST,PATCH,DELETE,OPTIONS');
+  reply.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (request.method === 'OPTIONS') {
+    reply.statusCode = 204;
+    reply.end();
+    return;
+  }
+
   next();
 });
 
@@ -105,6 +115,8 @@ fastify.get<ItemsGetRequest>('/items', request => {
       })
       .slice(skip, skip + limit)
       .map(item => ({
+        id: item.id,
+        createdAt: item.createdAt,
         category: item.category,
         title: item.title,
         price: item.price,
@@ -162,6 +174,72 @@ fastify.put<ItemUpdateRequest>('/items/:id', (request, reply) => {
     throw error;
   }
 });
+
+const CategorySchema = z.enum(['auto', 'real_estate', 'electronics']);
+
+const AiBaseBodySchema = z.object({
+  itemId: z.number().int().positive().optional(),
+  category: CategorySchema,
+  title: z.string().trim().min(1),
+  description: z.string().optional(),
+  price: z.number().min(0).nullable().optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
+});
+
+interface AiPriceSuggestionRequest extends Fastify.RequestGenericInterface {
+  Body: z.infer<typeof AiBaseBodySchema>;
+}
+
+fastify.post<AiPriceSuggestionRequest>('/ai/price-suggestion', async (request, reply) => {
+  try {
+    const body = AiBaseBodySchema.parse(request.body);
+    const result = await generatePriceSuggestion({
+      items: ITEMS,
+      itemId: body.itemId,
+      category: body.category,
+      title: body.title,
+      description: body.description,
+      price: body.price,
+      params: body.params,
+    });
+
+    return result;
+  } catch (error) {
+    if (error instanceof ZodError) {
+      reply.status(400).send({ success: false, error: treeifyError(error) });
+      return;
+    }
+    throw error;
+  }
+});
+
+interface AiDescriptionSuggestionRequest extends Fastify.RequestGenericInterface {
+  Body: z.infer<typeof AiBaseBodySchema>;
+}
+
+fastify.post<AiDescriptionSuggestionRequest>(
+  '/ai/description-suggestion',
+  async (request, reply) => {
+    try {
+      const body = AiBaseBodySchema.parse(request.body);
+      const result = await generateDescriptionSuggestion({
+        category: body.category,
+        title: body.title,
+        description: body.description,
+        price: body.price,
+        params: body.params,
+      });
+
+      return result;
+    } catch (error) {
+      if (error instanceof ZodError) {
+        reply.status(400).send({ success: false, error: treeifyError(error) });
+        return;
+      }
+      throw error;
+    }
+  },
+);
 
 const port = Number(process.env.port) ?? 8080;
 

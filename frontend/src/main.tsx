@@ -16,9 +16,63 @@ const queryClient = new QueryClient({
 })
 
 const theme = createTheme({
+  shape: {
+    borderRadius: 10,
+  },
   palette: {
     mode: 'light',
-    primary: { main: '#1565c0' },
+    primary: { main: '#3d82f6' },
+    background: {
+      default: '#f7f8fa',
+      paper: '#ffffff',
+    },
+    text: {
+      primary: '#2a3240',
+      secondary: '#7c8593',
+    },
+  },
+  typography: {
+    fontFamily: '"RobotoCustom", "Segoe UI", sans-serif',
+  },
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          letterSpacing: '0.002em',
+        },
+      },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 10,
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        outlined: {
+          borderColor: '#eaedf3',
+        },
+      },
+    },
+    MuiButton: {
+      defaultProps: {
+        disableElevation: true,
+      },
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+        },
+      },
+    },
   },
 })
 
